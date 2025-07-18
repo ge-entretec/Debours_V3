@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { uploadJustificatif } from '../api/supabaseStorage';
 import { User, Debours } from '../types';
 import { typeLabels, sousTypeLabels, reglesDebours } from '../data/mockData';
 import { Upload, AlertCircle, CheckCircle, Info, MapPin, Clock, Calculator, Camera, Scan, FileText, Edit3, Calendar, Sparkles, AlertTriangle, Video, X } from 'lucide-react';
@@ -132,17 +133,23 @@ export function DeboursForm({ currentUser, onSubmit, onCancel }: DeboursFormProp
   };
 
   const handleFileAnalysis = async (file: File) => {
-    const analysis = await analyzeWithChatGPT(file);
-    if (analysis) {
-      setFormData(prev => ({
-        ...prev,
-        montant: analysis.montant.toString(),
-        date: analysis.date,
-        type: analysis.type,
-        sousType: analysis.sousType,
-        description: analysis.description,
-        justificatifs: [file.name]
-      }));
+    // Upload du fichier dans Supabase Storage
+    try {
+      const url = await uploadJustificatif(file, `${currentUser.id}_${Date.now()}`);
+      const analysis = await analyzeWithChatGPT(file);
+      if (analysis) {
+        setFormData(prev => ({
+          ...prev,
+          montant: analysis.montant.toString(),
+          date: analysis.date,
+          type: analysis.type,
+          sousType: analysis.sousType,
+          description: analysis.description,
+          justificatifs: [url]
+        }));
+      }
+    } catch (error) {
+      alert('Erreur lors de l’upload du justificatif : ' + (error as Error).message);
     }
   };
 
@@ -762,16 +769,22 @@ export function DeboursForm({ currentUser, onSubmit, onCancel }: DeboursFormProp
                           <input
                             type="file"
                             accept=".pdf,.jpg,.jpeg,.png"
-                            onChange={(e) => {
-                              const files = e.target.files;
-                              if (files) {
-                                const fileNames = Array.from(files).map(file => file.name);
-                                setFormData(prev => ({
-                                  ...prev,
-                                  justificatifs: [...prev.justificatifs, ...fileNames]
-                                }));
-                              }
-                            }}
+                            onChange={async (e) => {
+                               const files = e.target.files;
+                               if (files) {
+                                 for (const file of Array.from(files)) {
+                                   try {
+                                     const url = await uploadJustificatif(file, `${currentUser.id}_${Date.now()}`);
+                                     setFormData(prev => ({
+                                       ...prev,
+                                       justificatifs: [...prev.justificatifs, url]
+                                     }));
+                                   } catch (error) {
+                                     alert('Erreur lors de l’upload du justificatif : ' + (error as Error).message);
+                                   }
+                                 }
+                               }
+                             }}
                             className="hidden"
                           />
                         </label>
